@@ -1903,27 +1903,44 @@
             { id: 'ZWA', name: 'Meppelerdiep (Zwartsluis)', actueel: -0.10, v24: -0.04, v48: 0.02, trend: 'stabiel', tijd: '11:10' }
         ];
 
-        function fetchLiveRWSData() {
-            // Let op: In een productie-omgeving wordt dit via een veilige back-end proxy (BFF)
-            // gekoppeld aan de RWS Waterinfo DD API of WFS endpoints wegens CORS restricties op client-side JS.
-            // Hier tonen we strikt de hardcoded snapshot data zonder willekeurige fluctuaties.
-            const btn = document.querySelector('[onclick="fetchLiveRWSData()"] i');
-            if(btn) btn.classList.add('animate-spin');
+        async function fetchLiveRWSData() {
+    const btn = document.querySelector('[onclick="fetchLiveRWSData()"] i');
+    if(btn) btn.classList.add('animate-spin');
 
-            // Simuleer een asynchrone netwerk request
-            setTimeout(() => {
-                // Willekeurige fluctuatie en actuele systeemtijd verwijderd voor strikte RWS datarepresentatie.
-                
-                renderRWSDashboard();
-                
-                const refPoint = liveRWSData.find(p => p.id === 'HAS');
-                if(refPoint) {
-                    document.getElementById('rws-live-header-peil').innerText = refPoint.actueel.toFixed(2) + ' m NAP';
-                }
-                
-                if(btn) btn.classList.remove('animate-spin');
-            }, 750); 
-        }
+    try {
+        // 1. De originele RWS API URL (Vervang dit door de daadwerkelijke RWS Waterinfo JSON endpoint die je wilt gebruiken)
+        const rwsApiUrl = encodeURIComponent('[https://waterinfo.rws.nl/api/meetpunten/waterstanden](https://waterinfo.rws.nl/api/meetpunten/waterstanden)'); 
+        
+        // 2. Jouw eigen Cloudflare Worker URL
+        const proxyUrl = 'https://rws-cors-proxy.<jouw-gebruikersnaam>.workers.dev/?url=';
+
+        // 3. Haal de data op via jouw proxy
+        const response = await fetch(proxyUrl + rwsApiUrl);
+        
+        if (!response.ok) throw new Error('Netwerkfout bij ophalen RWS data');
+        
+        const data = await response.json();
+        
+        // 4. Update de liveRWSData variabele met de echte data uit het JSON bestand
+        // (Hoe dit er exact uitziet ligt aan de structuur van de specifieke RWS API die je aanspreekt)
+        /* liveRWSData = [
+            { id: 'HAS', name: 'Hasselt', actueel: data.hasselt.waarde, ... },
+            ...
+        ];
+        */
+
+        renderRWSDashboard();
+        document.getElementById('rws-live-header-peil').innerText = liveRWSData[0].actueel.toFixed(2) + ' m NAP';
+        
+    } catch (error) {
+        console.error("Fout bij ophalen RWS data:", error);
+        // Fallback: Als het mislukt, hou de mogelijkheid voor handmatige invoer open!
+        showError("Kan de actuele RWS data niet ophalen. Probeer het later of gebruik handmatige invoer.");
+    } finally {
+        if(btn) btn.classList.remove('animate-spin');
+    }
+}
+
 
         function renderRWSDashboard() {
             const container = document.getElementById('rws-dashboard-cards');
