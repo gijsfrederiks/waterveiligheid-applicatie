@@ -2056,20 +2056,22 @@
         let deferredPrompt;
 
         function setupPWA() {
+            // Controleer of de app al als PWA draait
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            const btn = document.getElementById('pwa-install-btn');
+            
+            if (isStandalone && btn) {
+                btn.style.display = 'none'; // Verberg knop als we al in de geïnstalleerde app zitten
+            }
+
             const manifest = {
                 name: "Hoogwater Zwartewaterland",
                 short_name: "Hoogwater",
-                start_url: "./",
+                start_url: window.location.href,
                 display: "standalone",
                 background_color: "#f8fafc",
                 theme_color: "#1e3a8a",
                 icons: [
-                    {
-                        src: "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='30' fill='%231e3a8a'/%3E%3Cpath d='M40 96 Q 96 40 152 96 T 152 150 Z' fill='%2360a5fa'/%3E%3C/svg%3E",
-                        sizes: "192x192",
-                        type: "image/svg+xml",
-                        purpose: "any maskable"
-                    },
                     {
                         src: "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%231e3a8a'/%3E%3Cpath d='M100 256 Q 256 100 412 256 T 412 400 Z' fill='%2360a5fa'/%3E%3C/svg%3E",
                         sizes: "512x512",
@@ -2089,7 +2091,7 @@
                 self.addEventListener('install', (e) => self.skipWaiting());
                 self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
                 self.addEventListener('fetch', (e) => {
-                    e.respondWith(fetch(e.request).catch(() => new Response('U bent offline. Controleer uw verbinding.')));
+                    e.respondWith(fetch(e.request).catch(() => new Response('U bent offline.')));
                 });
             `;
             const swBlob = new Blob([swCode], { type: 'application/javascript' });
@@ -2107,14 +2109,34 @@
                 e.preventDefault();
                 deferredPrompt = e;
             });
+
+            // Luister of de app succesvol is geïnstalleerd
+            window.addEventListener('appinstalled', () => {
+                deferredPrompt = null;
+                console.log('App is succesvol geïnstalleerd door de gebruiker');
+                if (btn) {
+                    btn.innerHTML = '<i data-lucide="check" class="w-4 h-4 text-green-400"></i> Geïnstalleerd';
+                    btn.classList.add('bg-green-900', 'border-green-500');
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                    
+                    // Verberg de knop na 3 seconden
+                    setTimeout(() => { btn.style.display = 'none'; }, 3000);
+                }
+            });
         }
 
         async function installPWA() {
-            // 1. Apple (iOS Safari) detectie - Ondersteunt de knop helemaal niet.
+            // 1. Apple (iOS Safari) detectie
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
             
             if (isIOS) {
-                showError("Installeren op iPhone of iPad:\n\nApple ondersteunt deze installatieknop helaas niet.\n\nDoe het volgende om de app te installeren:\n1. Tik op het deel-icoon (vierkantje met pijl omhoog) ergens onderin of bovenin uw browser.\n2. Scroll naar beneden en kies 'Zet op beginscherm' (of 'Add to Home Screen').");
+                showError("Installeren op iPhone of iPad:\n\nApple ondersteunt deze automatische installatieknop helaas niet.\n\nDoe het volgende om de app te installeren:\n1. Tik op het deel-icoon (vierkantje met pijl omhoog) ergens onderin of bovenin uw browser.\n2. Scroll naar beneden en kies 'Zet op beginscherm' (of 'Add to Home Screen').");
+                return;
+            }
+
+            // Controleer of we niet al in de geïnstalleerde app zitten
+            if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+                showError("U gebruikt deze applicatie momenteel al als zelfstandige app!");
                 return;
             }
 
@@ -2124,22 +2146,22 @@
                     deferredPrompt.prompt();
                     const { outcome } = await deferredPrompt.userChoice;
                     if (outcome === 'accepted') {
-                        console.log('De gebruiker heeft de app geïnstalleerd');
+                        console.log('Installatie goedgekeurd');
                     }
                     deferredPrompt = null; 
                 } catch(err) {
                     console.error("Installatie prompt fout:", err);
                 }
             } else {
-                // 3. Foutafhandeling als de prompt niet beschikbaar is (zoals hier in de preview of zonder HTTPS)
-                let reason = "Automatische installatie via deze knop is momenteel niet beschikbaar.";
+                // 3. Foutafhandeling als de prompt niet beschikbaar is
+                let reason = "De automatische installatie-prompt is momenteel niet beschikbaar.";
                 
                 if (window !== window.top) {
-                    reason += "\n\nReden: U bekijkt de applicatie in een voorbeeldweergave of editor. Browsers blokkeren de installatie hierin.\n\nOplossing: Zodra u uw website op GitHub Pages bezoekt (buiten deze editor), zal de knop werken.";
+                    reason += "\n\nReden: U bekijkt de applicatie in een editor/voorbeeldweergave. Browsers blokkeren de installatie hierin.\n\nOplossing: Zodra u uw website opent via uw directe GitHub Pages link, zal de knop werken.";
                 } else if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                    reason += "\n\nReden: Om een app te installeren vereist de browser een veilige HTTPS-verbinding (u gebruikt nu " + window.location.protocol + ").\n\nOplossing: Zodra uw website live staat via GitHub Pages (deze forceert HTTPS), zal de knop automatisch gaan werken.";
+                    reason += "\n\nReden: Om een app te installeren vereist de browser een veilige HTTPS-verbinding.";
                 } else {
-                    reason += "\n\nMogelijke redenen:\n- U heeft de applicatie al geïnstalleerd op dit apparaat.\n- Uw browser (bijv. Firefox) blokkeert de knop. U kunt de app dan installeren via het browsermenu (kies 'App installeren' of 'Toevoegen aan startscherm').";
+                    reason += "\n\nMeest waarschijnlijke reden:\nU heeft de app zojuist al geïnstalleerd! Controleer het startscherm of het app-overzicht van uw apparaat. Browsers blokkeren de knop als de app al op uw apparaat staat.\n\n(Lukt het niet? Gebruik dan de optie 'Toevoegen aan startscherm' via het instellingenmenu van uw browser zelf).";
                 }
 
                 showError(reason);
